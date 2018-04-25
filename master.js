@@ -35,24 +35,27 @@ if(process.stdout.isTTY){
 					const cred = requireOptional('./cred');
 					if(!cred || cred.sqlLogin === undefined)
 						return false;
-					const mysql = require('mysql');
-					let sql = mysql.createConnection(cred.sqlLogin);
-					sql.connect((err)=>{
-						if(err)
-							console.log(err);
-						else {
-							sql.query(argline,(err,result)=>{
-								if(err) {
-									if(err.fatal)
-										console.log("Fatal error: "+err.sqlMessage);
-									else
-										console.log("Error: "+err.sqlMessage);
-								} else
-									console.log("Result: "+result);
-								sql.end();
-							});
-						}
-					});
+					const mysql = requireOptional('mysql');
+					if(mysql){
+						let sql = mysql.createConnection(cred.sqlLogin);
+						sql.connect((err)=>{
+							if(err)
+								console.log(err);
+							else {
+								sql.query(argline,(err,result)=>{
+									if(err) {
+										if(err.fatal)
+											console.log("Fatal error: "+err.sqlMessage);
+										else
+											console.log("Error: "+err.sqlMessage);
+									} else
+										console.log("Result: "+result);
+									sql.end();
+								});
+							}
+						});
+					} else
+						return false;
 				} catch (err) {
 					console.log(err.stack);
 				}
