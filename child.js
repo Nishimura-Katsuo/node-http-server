@@ -6,7 +6,6 @@ const domain = require('domain');
 const http = require('http');
 const https = require('https');
 const fs = require('fs');
-const stream = require('stream');
 const express = require('express');
 const compression = require('compression');
 const url = require('url');
