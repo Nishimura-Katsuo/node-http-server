@@ -7,4 +7,4 @@ Features:
  - Automatically forks for each CPU, and restarts children that die
  - Based on 'express' and 'compression' npm packages for competitive performance to apache
  - Wonderful!!!
- - Has Beta
+ - Has Beta stuff
