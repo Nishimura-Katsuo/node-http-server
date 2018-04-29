@@ -85,9 +85,9 @@ function scriptHandler(req, res, next) {
 						finished=true;
 						if(!localSandbox.responseCode)
 							localSandbox.responseCode=200;
-						for(k in localSandbox.setCookie) {
+						for(let k in localSandbox.setCookie){
 							res.setHeader('Set-Cookie',qs.escape(k)+"="+qs.escape(localSandbox.setCookie[k]));
-						}
+						};
 						res.writeHead(localSandbox.responseCode,localSandbox.headers);
 						if(localSandbox.response != undefined && localSandbox.response != null)
 							res.end(localSandbox.response,'binary');
@@ -122,7 +122,7 @@ function scriptHandler(req, res, next) {
 				case "HEAD":
 				case "GET":
 				case "POST":
-					if(filepathbase.substr(-4) != ".sss")
+					if(!/\.sss$/i.test(filepathbase))
 						filepathbase += ".sss";
 					fs.stat(filepathbase,(err,stats)=>got_stats(filepathbase,err,stats));
 					break;
