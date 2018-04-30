@@ -23,6 +23,8 @@ if(!fs.existsSync(htmlDocs))
 	fs.mkdirSync(htmlDocs);
 
 function scriptHandler(req, res, next) {
+	if(req.method!="HEAD" && req.method!="GET" && req.method!="POST")
+		return next();
 	let q=url.parse(req.url,true);
 	let filepathbase = htmlDocs+decodeURI(q.pathname);
 	let postdata=[];
@@ -38,9 +40,6 @@ function scriptHandler(req, res, next) {
 		return;
 	});
 	d.run(()=>{
-		function get_post_data() {
-			return Buffer.concat(postdata).toString();
-		}
 		function got_stats(filename,err,stats,firstTime){
 			if(err || !(stats.isFile()))
 					return next();
@@ -69,41 +68,36 @@ function scriptHandler(req, res, next) {
 						headers: {'Content-Type': 'text/plain'},
 						response: '',
 						setCookie: {},
-						getPostData: get_post_data,
+						getPostData: ()=>Buffer.concat(postdata).toString(),
 						query: q.query,
 						method: req.method,
 						path: q.pathname,
-						finish: undefined,
+						finish: Promise.resolve(),
 					});
 					if(req.headers['cookie']){
 						localSandbox.cookie = qs.parse(req.headers['cookie'],';');
 					} else {
 						localSandbox.cookie = {};
 					}
-					const finishrequest = (e)=>{
+					scriptSandbox = localSandbox;
+					scriptObj.runInThisContext({});
+					if(!localSandbox.finish || localSandbox.finish.constructor !== Promise)
+						localSandbox.finish = Promise.resolve();
+					const finishRequest=defaultCode=>{
 						if(finished)return;
 						finished=true;
 						if(!localSandbox.responseCode)
-							localSandbox.responseCode=200;
+							localSandbox.responseCode=defaultCode;
 						for(let k in localSandbox.setCookie){
 							res.setHeader('Set-Cookie',qs.escape(k)+"="+qs.escape(localSandbox.setCookie[k]));
-						};
+						}
 						res.writeHead(localSandbox.responseCode,localSandbox.headers);
 						if(localSandbox.response != undefined && localSandbox.response != null)
 							res.end(localSandbox.response,'binary');
 						else
 							res.end();
 					};
-					scriptSandbox = localSandbox;
-					scriptObj.runInThisContext({});
-					if(localSandbox.finish && localSandbox.finish.constructor === Promise)
-						localSandbox.finish.then(finishrequest,(e)=>{
-							if(!localSandbox.responseCode)
-								localSandbox.responseCode=400;
-							return finishrequest(e);
-						});
-					else
-						finishrequest(null);
+					localSandbox.finish.then(finishRequest(200),finishRequest(400));
 				});
 				return;
 			}
@@ -118,17 +112,9 @@ function scriptHandler(req, res, next) {
 			}
 		});
 		req.on('end',()=>{
-			switch(req.method) {
-				case "HEAD":
-				case "GET":
-				case "POST":
-					if(!/\.sss$/i.test(filepathbase))
-						filepathbase += ".sss";
-					fs.stat(filepathbase,(err,stats)=>got_stats(filepathbase,err,stats));
-					break;
-				default:
-					return next();
-			}
+			if(!/\.sss$/i.test(filepathbase))
+				filepathbase += ".sss";
+			fs.stat(filepathbase,(err,stats)=>got_stats(filepathbase,err,stats));
 		});
 	});
 }
