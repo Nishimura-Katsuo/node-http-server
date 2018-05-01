@@ -48,65 +48,68 @@ function scriptHandler(req, res, next) {
 				res.end();
 			} else {
 				fs.readFile(filename,(err,data)=>{
-					if(err) { res.writeHead(500, {}); res.end(); return; }
-					if(scriptcache[filename] && scriptcache[filename].mtime == stats.mtime.toUTCString()) {
-						scriptObj = scriptcache[filename].script;
-						localSandbox = scriptcache[filename].context;
-					} else {
-						logger.log("Compiling: "+filename);
-						scriptObj = new vm.Script("(function(script,console,require){"+data+"\n})(scriptSandbox,logger,require);",{filename:filename, displayErrors: true});
-						localSandbox = {};
-						scriptcache[filename] = {};
-						scriptcache[filename].script = scriptObj;
-						scriptcache[filename].context = localSandbox;
-						scriptcache[filename].mtime = stats.mtime.toUTCString();
-					}
-					let finished=false;
-					Object.assign(localSandbox,{
-						request: req,
-						responseCode: 0,
-						headers: {'Content-Type': 'text/plain'},
-						response: '',
-						setCookie: {},
-						getPostData: ()=>Buffer.concat(postdata).toString(),
-						query: q.query,
-						method: req.method,
-						path: q.pathname,
-						finish: Promise.resolve(),
-					});
-					if(req.headers['cookie']){
-						localSandbox.cookie = qs.parse(req.headers['cookie'],';');
-					} else {
-						localSandbox.cookie = {};
-					}
-					scriptSandbox = localSandbox;
-					scriptObj.runInThisContext({});
-					if(!localSandbox.finish || localSandbox.finish.constructor !== Promise)
-						localSandbox.finish = Promise.resolve();
-					const finishRequest=defaultCode=>{
-						if(finished)return;
-						finished=true;
-						if(!localSandbox.responseCode)
-							localSandbox.responseCode=defaultCode;
-						for(let k in localSandbox.setCookie){
-							res.setHeader('Set-Cookie',qs.escape(k)+"="+qs.escape(localSandbox.setCookie[k]));
+					try {
+						if(err) { res.writeHead(500, {}); res.end(); return; }
+						if(scriptcache[filename] && scriptcache[filename].mtime == stats.mtime.toUTCString()) {
+							scriptObj = scriptcache[filename].script;
+							localSandbox = scriptcache[filename].context;
+						} else {
+							logger.log("Compiling: "+filename);
+							scriptObj = new vm.Script("(function(script,console,require){"+data+"\n})(scriptSandbox,logger,require);",{filename:filename, displayErrors: true});
+							localSandbox = {};
+							scriptcache[filename] = {};
+							scriptcache[filename].script = scriptObj;
+							scriptcache[filename].context = localSandbox;
+							scriptcache[filename].mtime = stats.mtime.toUTCString();
 						}
-						res.writeHead(localSandbox.responseCode,localSandbox.headers);
-						if(localSandbox.response != undefined && localSandbox.response != null)
-							res.end(localSandbox.response,'binary');
-						else
-							res.end();
-					};
-					localSandbox.finish.then(finishRequest(200),finishRequest(400));
+						let finished=false;
+						Object.assign(localSandbox,{
+							request: req,
+							responseCode: 0,
+							headers: {'Content-Type': 'text/plain'},
+							response: '',
+							setCookie: {},
+							getPostData: ()=>Buffer.concat(postdata).toString(),
+							query: q.query,
+							method: req.method,
+							path: q.pathname,
+							finish: Promise.resolve(),
+						});
+						if(req.headers['cookie']){
+							localSandbox.cookie = qs.parse(req.headers['cookie'],';');
+						} else {
+							localSandbox.cookie = {};
+						}
+						scriptSandbox = localSandbox;
+						scriptObj.runInThisContext({});
+						if(!localSandbox.finish || localSandbox.finish.constructor !== Promise)
+							localSandbox.finish = Promise.resolve();
+						const finishRequest=defaultCode=>{
+							if(finished)return;
+							finished=true;
+							if(!localSandbox.responseCode)
+								localSandbox.responseCode=defaultCode;
+							for(let k in localSandbox.setCookie){
+								res.setHeader('Set-Cookie',qs.escape(k)+"="+qs.escape(localSandbox.setCookie[k]));
+							}
+							res.writeHead(localSandbox.responseCode,localSandbox.headers);
+							if(localSandbox.response != undefined && localSandbox.response != null)
+								res.end(localSandbox.response,'binary');
+							else
+								res.end();
+						};
+						localSandbox.finish.then(finishRequest(200),finishRequest(400));
+					} catch (err) {
+						res.status(500).end(err.stack);
+					}
 				});
 				return;
 			}
 		}
 		req.on('data',(chunk) => {
 			if(postdata.length > 1e6) {
-				res.writeHead(413, {'Content-Type': 'text/plain'});
-				res.end();
-				req.connection.destroy();
+				res.status(413).end();
+				res.connection.destroy();
 			} else {
 				postdata.push(chunk);
 			}
@@ -119,12 +122,23 @@ function scriptHandler(req, res, next) {
 	});
 }
 
+var msg404 = ["Not found!!!","Recheck your URL, bruh","I cahna do et, Captain!"];
+
 // server setup
 const server = express();
 const staticOpts = { extensions: ['.html','.htm','.json','.lib'] };
 server.use(compression());
 server.use(scriptHandler);
 server.use(express.static('html',staticOpts));
+server.use(function(req,res){
+	let msg=msg404[Math.floor(Math.random()*msg404.length)];
+	res.writeHead(404, {'Content-Type': 'text/html'});
+	res.end(`<html><head><title>Not Found</title></head><body><h1>${msg}</h1></body></html>`);
+});
+server.use(function(error,req,res,next){
+	res.writeHead(500, {'Content-Type': 'text/html'});
+	res.end(`<html><head><title>Internal Server Error</title></head><body><h1>ERROR</h1></body></html>`);
+});
 https.createServer({
 	ca: fs.readFileSync('./server.ca-bundle'),
 	key: fs.readFileSync('./server.key'),
