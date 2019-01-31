@@ -10,6 +10,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "compression": "^1.7.2",
-    "express": "^4.16.3"
+    "express": "^4.16.3",
+    "ws": "^6.1.0"
   }
 }
