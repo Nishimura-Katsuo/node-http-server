@@ -1,3 +1,4 @@
+"use strict";
 /* globals global require process logDir htmlDocs logger Buffer */
 
 // the ws and compression modules are from npm
@@ -183,7 +184,7 @@ function scriptHandler (req, res, next) {
 if (cluster.isMaster) { // master code
 	console.log('Spawning children...');
 	cluster.fork(); // only fork once, this just allows the server to keep itself alive
-	cluster.on('exit', (worker, code, signal) => {
+	cluster.on('exit', (worker /*, code, signal */) => {
 		console.log(`worker ${worker.process.pid} died`);
 		cluster.fork(); // if server dies fork a new thread
 	});
@@ -206,7 +207,7 @@ if (cluster.isMaster) { // master code
 		res.writeHead(404, {'Content-Type': 'text/html'});
 		res.end(`<html><head><title>Not Found</title></head><body><h1>${msg}</h1></body></html>`);
 	});
-	server.use(function (error, req, res, next) {
+	server.use(function (error, req, res) {
 		res.writeHead(500, {'Content-Type': 'text/html'});
 		res.end(`<html><head><title>Internal Server Error</title></head><body><h1>ERROR</h1></body></html>`);
 	});
