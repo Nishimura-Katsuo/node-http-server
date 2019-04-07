@@ -1,0 +1,8 @@
+<html><head><script>
+var x = new XMLHttpRequest();
+x.open("POST", "/cb.php", true);
+x.setRequestHeader("Content-type", "application/json");
+x.send(JSON.stringify({
+	ScriptCallback: true,
+}));
+</script></head></html>
