@@ -1,4 +1,4 @@
-# node-script-http
+# node-http-server
 A simple web server built with node/express and support for script urls (*.sss)
 
 Features:
