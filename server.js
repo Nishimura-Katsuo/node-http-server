@@ -19,7 +19,7 @@ const acceptedHosts = ["nishicode.com", "www.nishicode.com"];
 const badExtension = /\.php(?=\?|$)/;
 const maxPost = 1e4;
 
-let isValidHost = (host) => acceptedHosts.some(check => check === host);
+let isValidHost = (host) => (host = host.split(':')[0], acceptedHosts.some(check => check === host));
 
 /* function salter (text) {
 	if (!text) {
@@ -246,6 +246,8 @@ function checkDomain (req, res, next) {
 }
 
 function killRequest (req, res, next) {
+	logger.log('Checking: ' + req.headers.host);
+
 	if (req.headers.host && isValidHost(req.headers.host) && !badExtension.test(req.url)) {
 		return typeof next === 'function' ? next() : false;
 	}
@@ -274,7 +276,7 @@ function killRequest (req, res, next) {
 			res.writeHead(404, {
 				'Content-Type': 'text/html',
 			});
-			fs.createReadStream('./badreply.html').pipe(res);
+			fs.createReadStream(__dirname + '/badreply.html').pipe(res);
 		} catch (err) {
 			logger.log(err);
 		}
@@ -297,7 +299,26 @@ if (cluster.isMaster) { // master code
 		cluster.fork(); // if server dies fork a new thread
 	});
 } else { // child code
-	logger.log(`[${process.pid} @ ${new Date().toUTCString()}] Starting node HTTP Server`);
+	logger.log(`[${process.pid} @ ${new Date().toUTCString()}] Starting node HTTP Server (ARGV: ${JSON.stringify(process.argv)})`);
+	let httpPort = 80, httpsPort = 443;
+	process.argv.slice(2).forEach(arg => {
+		arg = arg.split(':');
+		let flag = arg.shift();
+		arg = arg.join(':');
+
+		switch (flag) {
+		case '--port':
+			httpPort = Math.max(80, arg | 0);
+			httpsPort = httpPort + 363;
+			break;
+		default:
+			logger.log('Unknown flag: ' + flag);
+			break;
+		}
+	});
+
+	logger.log(`Using ports: ${httpPort} and ${httpsPort}`);
+
 	process.on('exit', (code) => {
 		logger.log(`[${process.pid} @ ${new Date().toUTCString()}] Exiting with code: ${code}\n`);
 	});
@@ -325,9 +346,9 @@ if (cluster.isMaster) { // master code
 	});
 
 	let httpserver = https.createServer({
-		ca: fs.readFileSync('./server.ca-bundle'),
-		key: fs.readFileSync('./server.key'),
-		cert: fs.readFileSync('./server.crt')
+		ca: fs.readFileSync(__dirname + '/server.ca-bundle'),
+		key: fs.readFileSync(__dirname + '/server.key'),
+		cert: fs.readFileSync(__dirname + '/server.crt')
 	}, server);
 	let wss = new WebSocket.Server({ server: httpserver });
 	wss.on('connection', (ws, req) => {
@@ -355,17 +376,20 @@ if (cluster.isMaster) { // master code
 
 		ws.terminate();
 	});
-	httpserver.listen(443);
+	httpserver.listen(httpsPort);
 
 	// forward non-secure requests to https
 	http.createServer((req, res) => {
+		logger.log('Incoming request...');
+
 		if (!killRequest(req, res) && !checkDomain(req, res)) {
 			logger.log(`[${process.pid} @ ${new Date().toUTCString()}][${req.socket.remoteAddress}] ${req.method} ${JSON.stringify(req.headers.host)}${req.url}\t(forward to https)`);
-			res.writeHead(301, {Location: 'https://' + req.headers.host + req.url});
+			let portlessHost = req.headers.host.split(':')[0];
+			res.writeHead(301, {Location: 'https://' + portlessHost + (httpsPort !== 443 ? ':' + httpsPort : '') + req.url});
 			res.end();
 		}
 	}).on("connection", (sock) => {
 		sock.setNoDelay(true);
-	}).listen(80);
+	}).listen(httpPort);
 }
 
